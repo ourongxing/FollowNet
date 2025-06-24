@@ -1,0 +1,15 @@
+name = "follownet-frontend"
+compatibility_date = "2024-01-15"
+
+[build]
+command = "npm run build"
+cwd = "."
+
+[build.upload]
+format = "directory"
+dir = ".next"
+
+[[redirects]]
+from = "/api/*"
+to = "https://your-railway-app.railway.app/api/*"
+status = 200 
