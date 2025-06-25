@@ -13,6 +13,156 @@ class GitHubProfileScraper:
         self.data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
         os.makedirs(self.data_dir, exist_ok=True)
 
+    async def scrape_profiles_from_csv_with_progress(self, csv_file_path: str, max_users: int = 100, batch_size: int = 5):
+        """
+        从CSV文件读取用户列表，获取每个用户的详细资料，带进度报告
+
+        Args:
+            csv_file_path: 第一阶段生成的CSV文件路径
+            max_users: 最大处理用户数
+            batch_size: 批次大小
+
+        Yields:
+            包含进度信息的字典
+        """
+        print(f"🔍 第二阶段：开始从 {csv_file_path} 获取用户详细资料...")
+
+        # 读取第一阶段的用户列表
+        usernames = await self._read_usernames_from_csv(csv_file_path)
+
+        if not usernames:
+            yield {
+                'type': 'error',
+                'message': '没有找到用户名列表'
+            }
+            return
+
+        # 限制处理数量
+        usernames = usernames[:max_users]
+        total_users = len(usernames)
+
+        yield {
+            'type': 'progress',
+            'message': f'将处理 {total_users} 个用户',
+            'progress': 0,
+            'total_count': total_users,
+            'processed_count': 0
+        }
+
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        # 设置用户代理
+        await page.set_extra_http_headers({
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        })
+
+        enriched_users = []
+        processed_count = 0
+
+        try:
+            # 分批处理用户
+            for i in range(0, len(usernames), batch_size):
+                batch = usernames[i:i + batch_size]
+                batch_num = i // batch_size + 1
+
+                yield {
+                    'type': 'progress',
+                    'message': f'处理批次 {batch_num}: {len(batch)} 个用户',
+                    'progress': (processed_count / total_users) * 100,
+                    'total_count': total_users,
+                    'processed_count': processed_count
+                }
+
+                for username_data in batch:
+                    username = username_data['username']
+                    try:
+                        yield {
+                            'type': 'progress',
+                            'message': f'正在获取用户资料: {username}',
+                            'progress': (processed_count / total_users) * 100,
+                            'current_user': username,
+                            'total_count': total_users,
+                            'processed_count': processed_count
+                        }
+
+                        user_details = await self._get_user_details(username, page, username_data)
+                        if user_details:
+                            enriched_users.append(user_details)
+                            processed_count += 1
+
+                            yield {
+                                'type': 'user_completed',
+                                'message': f'✅ 成功获取 {username} 的资料',
+                                'progress': (processed_count / total_users) * 100,
+                                'current_user': username,
+                                'total_count': total_users,
+                                'processed_count': processed_count,
+                                'user_data': user_details
+                            }
+                        else:
+                            processed_count += 1
+                            yield {
+                                'type': 'user_failed',
+                                'message': f'❌ 获取 {username} 的资料失败',
+                                'progress': (processed_count / total_users) * 100,
+                                'current_user': username,
+                                'total_count': total_users,
+                                'processed_count': processed_count
+                            }
+                    except Exception as e:
+                        processed_count += 1
+                        yield {
+                            'type': 'user_error',
+                            'message': f'获取 {username} 资料时出错: {e}',
+                            'progress': (processed_count / total_users) * 100,
+                            'current_user': username,
+                            'total_count': total_users,
+                            'processed_count': processed_count
+                        }
+                        continue
+
+                # 批次间暂停
+                if i + batch_size < len(usernames):
+                    yield {
+                        'type': 'progress',
+                        'message': '批次间暂停...',
+                        'progress': (processed_count / total_users) * 100,
+                        'total_count': total_users,
+                        'processed_count': processed_count
+                    }
+                    await asyncio.sleep(2)
+
+            # 保存详细资料到新的CSV文件
+            yield {
+                'type': 'progress',
+                'message': f'保存 {len(enriched_users)} 个用户的详细资料...',
+                'progress': 95,
+                'total_count': total_users,
+                'processed_count': processed_count
+            }
+
+            output_file = await self._save_enriched_csv(enriched_users, csv_file_path)
+
+            yield {
+                'type': 'complete',
+                'message': f'✅ 第二阶段完成！获取了 {len(enriched_users)} 个用户的详细资料',
+                'progress': 100,
+                'total_count': total_users,
+                'processed_count': processed_count,
+                'output_file': output_file
+            }
+
+        except Exception as e:
+            yield {
+                'type': 'error',
+                'message': f'第二阶段处理过程中出错: {e}'
+            }
+        finally:
+            await browser.close()
+            await playwright.stop()
+
     async def scrape_profiles_from_csv(self, csv_file_path: str, max_users: int = 100, batch_size: int = 5) -> str:
         """
         从CSV文件读取用户列表，获取每个用户的详细资料

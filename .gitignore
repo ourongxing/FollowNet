@@ -52,4 +52,6 @@ __pycache__/
 
 # Playwright
 backend/playwright/
-test-results/ 
+test-results/
+
+data/
