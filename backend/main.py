@@ -40,81 +40,68 @@ class ScrapeRequest(BaseModel):
 class ScrapeResponse(BaseModel):
     success: bool
     message: str
-    platform: Optional[str] = None
-    total_extracted: Optional[int] = None
-    data: Optional[List[Dict]] = None
-    download_url: Optional[str] = None
-    current_page: Optional[int] = None  # 当前页码
-    has_next_page: Optional[bool] = None  # 是否有下一页
-    cache_id: Optional[str] = None  # 缓存ID，用于后续分页请求
+    platform: str
+    total_extracted: int
+    data: List[Dict]
+    download_url: str
+    current_page: int
+    has_next_page: bool
+    cache_id: str
 
-# 存储爬取结果的内存缓存
-scrape_cache = {}
+class StreamingControlRequest(BaseModel):
+    session_id: str
+    action: str  # 'pause', 'resume', 'stop'
+
+# 全局会话管理
+streaming_sessions = {}
+
+class StreamingSession:
+    def __init__(self, session_id: str, request: ScrapeRequest):
+        self.session_id = session_id
+        self.request = request
+        self.is_paused = False
+        self.is_stopped = False
+        self.is_running = False
+        self.progress_generator = None
+        self.current_data = []
+
+    def pause(self):
+        self.is_paused = True
+
+    def resume(self):
+        self.is_paused = False
+
+    def stop(self):
+        self.is_stopped = True
+        self.is_running = False
 
 def detect_platform(url: str) -> str:
-    """根据URL检测平台类型"""
-    parsed = urlparse(url)
-    domain = parsed.netloc.lower()
+    """检测URL对应的平台"""
+    url = url.lower()
 
-    if 'github.com' in domain:
+    if 'github.com' in url:
         return 'github'
-    elif 'twitter.com' in domain or 'x.com' in domain:
+    elif 'twitter.com' in url or 'x.com' in url:
         return 'twitter'
-    elif 'producthunt.com' in domain:
+    elif 'producthunt.com' in url:
         return 'producthunt'
-    elif 'weibo.com' in domain:
+    elif 'weibo.com' in url:
         return 'weibo'
-    elif 'news.ycombinator.com' in domain:
+    elif 'news.ycombinator.com' in url:
         return 'hackernews'
-    elif 'youtube.com' in domain or 'youtu.be' in domain:
+    elif 'youtube.com' in url or 'youtu.be' in url:
         return 'youtube'
-    elif 'reddit.com' in domain:
+    elif 'reddit.com' in url:
         return 'reddit'
-    elif 'medium.com' in domain:
+    elif 'medium.com' in url:
         return 'medium'
-    elif 'bilibili.com' in domain:
+    elif 'bilibili.com' in url:
         return 'bilibili'
     else:
-        raise ValueError(f"不支持的平台: {domain}")
+        raise ValueError(f"不支持的平台: {url}")
 
-@app.get("/")
-async def root():
-    return {"message": "FollowNet API 正在运行"}
-
-@app.get("/test-github-direct")
-async def test_github_direct():
-    """直接测试GitHub爬取器"""
-    try:
-        print("=== 直接测试GitHub爬取器 ===")
-
-        scraper = GitHubScraper()
-        url = "https://github.com/connor4312?tab=followers"
-
-        print(f"测试URL: {url}")
-
-        result = await scraper.scrape(url)
-
-        print(f"爬取结果数量: {len(result) if result else 0}")
-
-        if result:
-            print(f"前3条结果:")
-            for i, item in enumerate(result[:3], 1):
-                print(f"  {i}. {item.get('username', 'N/A')} - {item.get('display_name', 'N/A')}")
-
-        return {
-            "success": True,
-            "total": len(result) if result else 0,
-            "sample_data": result[:3] if result else []
-        }
-
-    except Exception as e:
-        print(f"错误: {e}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "error": str(e)
-        }
+# 数据缓存（在生产环境中应该使用数据库或Redis）
+data_cache = {}
 
 @app.post("/api/scrape", response_model=ScrapeResponse)
 async def scrape_followers(request: ScrapeRequest):
@@ -159,12 +146,7 @@ async def scrape_followers(request: ScrapeRequest):
         else:
             # 兼容旧版本，只支持第一页
             if request.page > 1:
-                return ScrapeResponse(
-                    success=False,
-                    message="该平台暂不支持分页爬取",
-                    platform=platform,
-                    current_page=request.page
-                )
+                raise HTTPException(status_code=400, detail="该平台暂不支持分页爬取")
             # 对于GitHub，传递max_users参数
             if platform == 'github' and hasattr(scraper, 'scrape'):
                 result = await scraper.scrape(request.url, max_users=request.max_users)
@@ -176,26 +158,23 @@ async def scrape_followers(request: ScrapeRequest):
         print(f"第{request.page}页爬取完成，结果数量: {len(data)}")
 
         if not data or len(data) == 0:
-            print("返回失败响应：未找到数据")
-            return ScrapeResponse(
-                success=False,
-                message="未找到数据或爬取失败",
-                platform=platform,
-                current_page=request.page
-            )
+            print("未找到数据，但仍返回空结果")
+            data = []
 
         # 生成缓存ID
-        cache_key = f"{request.url}_{request.page}"
         cache_id = str(uuid.uuid4())
-        scrape_cache[cache_id] = {
-            'data': data,
-            'platform': platform,
-            'url': request.url,
-            'page': request.page,
-            'scraped_at': datetime.now().isoformat()
-        }
 
-        print(f"数据已缓存，ID: {cache_id}")
+        # 保存到内存缓存
+        cache_data = {
+            'platform': platform,
+            'data': data,
+            'page': request.page,
+            'has_next': has_next,
+            'timestamp': datetime.now().isoformat()
+        }
+        data_cache[cache_id] = cache_data
+
+        print(f"缓存数据到 {cache_id}")
 
         return ScrapeResponse(
             success=True,
@@ -220,16 +199,21 @@ async def scrape_followers(request: ScrapeRequest):
 
 @app.post("/api/scrape-stream")
 async def scrape_stream(request: ScrapeRequest):
-    """流式爬取接口 - 边爬边返回数据"""
+    """流式爬取接口 - 边爬边返回数据，支持控制"""
+    session_id = str(uuid.uuid4())
 
     async def generate_stream() -> AsyncGenerator[str, None]:
+        session = StreamingSession(session_id, request)
+        streaming_sessions[session_id] = session
+        session.is_running = True
+
         try:
-            # 发送开始消息
-            yield f"data: {json.dumps({'type': 'start', 'message': '开始爬取...', 'url': request.url})}\n\n"
+            # 发送开始消息，包含session_id
+            yield f"data: {json.dumps({'type': 'start', 'message': '开始爬取...', 'url': request.url, 'session_id': session_id})}\n\n"
 
             # 检测平台
             platform = detect_platform(request.url)
-            yield f"data: {json.dumps({'type': 'platform', 'platform': platform})}\n\n"
+            yield f"data: {json.dumps({'type': 'platform', 'platform': platform, 'session_id': session_id})}\n\n"
 
             # 创建爬取器
             if platform == 'github':
@@ -251,17 +235,34 @@ async def scrape_stream(request: ScrapeRequest):
             elif platform == 'bilibili':
                 scraper = BilibiliScraper()
             else:
-                yield f"data: {json.dumps({'type': 'error', 'message': f'不支持的平台: {platform}'})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': f'不支持的平台: {platform}', 'session_id': session_id})}\n\n"
                 return
 
             # 为GitHub特殊处理，支持流式爬取
             if platform == 'github' and hasattr(scraper, 'scrape_with_progress'):
-                async for progress_data in scraper.scrape_with_progress(request.url, max_users=request.max_users):
+                session.progress_generator = scraper.scrape_with_progress(request.url, max_users=request.max_users)
+
+                async for progress_data in session.progress_generator:
+                    # 检查控制状态
+                    while session.is_paused and not session.is_stopped:
+                        await asyncio.sleep(0.5)
+
+                    if session.is_stopped:
+                        yield f"data: {json.dumps({'type': 'stopped', 'message': '爬取已停止', 'session_id': session_id})}\n\n"
+                        break
+
+                    # 添加session_id到所有消息
+                    progress_data['session_id'] = session_id
+
+                    # 如果是用户完成消息，保存数据
+                    if progress_data.get('type') == 'user_completed' and progress_data.get('user_data'):
+                        session.current_data.append(progress_data['user_data'])
+
                     yield f"data: {json.dumps(progress_data)}\n\n"
                     await asyncio.sleep(0.1)  # 小延迟避免前端处理不过来
             else:
                 # 其他平台的普通爬取
-                yield f"data: {json.dumps({'type': 'progress', 'message': f'正在爬取{platform}数据...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'progress', 'message': f'正在爬取{platform}数据...', 'session_id': session_id})}\n\n"
 
                 if hasattr(scraper, 'scrape_page'):
                     result = await scraper.scrape_page(request.url, request.page)
@@ -275,6 +276,8 @@ async def scrape_stream(request: ScrapeRequest):
                     data = result if result else []
                     has_next = False
 
+                session.current_data = data
+
                 # 发送最终结果
                 yield f"data: {json.dumps({
                     'type': 'complete',
@@ -282,12 +285,19 @@ async def scrape_stream(request: ScrapeRequest):
                     'total': len(data),
                     'has_next_page': has_next,
                     'current_page': request.page,
-                    'platform': platform
+                    'platform': platform,
+                    'session_id': session_id,
+                    'message': f'爬取完成！共获取 {len(data)} 个用户信息'
                 })}\n\n"
 
         except Exception as e:
             error_msg = f"爬取过程中出错: {str(e)}"
-            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': error_msg, 'session_id': session_id})}\n\n"
+        finally:
+            # 清理会话
+            session.is_running = False
+            if session_id in streaming_sessions:
+                del streaming_sessions[session_id]
 
     return StreamingResponse(
         generate_stream(),
@@ -299,6 +309,42 @@ async def scrape_stream(request: ScrapeRequest):
             "Access-Control-Allow-Headers": "*",
         }
     )
+
+@app.post("/api/streaming-control")
+async def control_streaming(request: StreamingControlRequest):
+    """控制流式爬取：暂停、继续、停止"""
+    if request.session_id not in streaming_sessions:
+        raise HTTPException(status_code=404, detail="会话不存在或已过期")
+
+    session = streaming_sessions[request.session_id]
+
+    if request.action == 'pause':
+        session.pause()
+        return {"success": True, "message": "爬取已暂停", "session_id": request.session_id}
+    elif request.action == 'resume':
+        session.resume()
+        return {"success": True, "message": "爬取已继续", "session_id": request.session_id}
+    elif request.action == 'stop':
+        session.stop()
+        return {"success": True, "message": "爬取已停止", "session_id": request.session_id}
+    else:
+        raise HTTPException(status_code=400, detail="无效的操作")
+
+@app.get("/api/streaming-status/{session_id}")
+async def get_streaming_status(session_id: str):
+    """获取流式爬取状态"""
+    if session_id not in streaming_sessions:
+        return {"exists": False, "message": "会话不存在或已过期"}
+
+    session = streaming_sessions[session_id]
+    return {
+        "exists": True,
+        "is_running": session.is_running,
+        "is_paused": session.is_paused,
+        "is_stopped": session.is_stopped,
+        "data_count": len(session.current_data),
+        "session_id": session_id
+    }
 
 @app.post("/api/scrape-and-download")
 async def scrape_and_download(request: ScrapeRequest):
@@ -392,51 +438,68 @@ async def scrape_and_download(request: ScrapeRequest):
 
 @app.get("/api/export-csv/{cache_id}")
 async def export_csv(cache_id: str):
-    """导出CSV文件"""
-    if cache_id not in scrape_cache:
-        raise HTTPException(status_code=404, detail="数据未找到或已过期")
+    """导出缓存数据为CSV文件"""
+    try:
+        if cache_id not in data_cache:
+            raise HTTPException(status_code=404, detail="数据不存在或已过期")
 
-    cached_data = scrape_cache[cache_id]
-    result = cached_data['data']
-    platform = cached_data['platform']
-    page = cached_data.get('page', 1)
+        cache_data = data_cache[cache_id]
+        platform = cache_data['platform']
+        data = cache_data['data']
+        page = cache_data['page']
 
-    # 生成CSV文件
-    csv_filename = f"follownet_{platform}_page{page}_data_{cache_id}.csv"
-    csv_path = os.path.join(tempfile.gettempdir(), csv_filename)
+        if not data:
+            raise HTTPException(status_code=404, detail="没有可导出的数据")
 
-    # 根据平台选择对应的爬取器来保存CSV
-    if platform == 'github':
-        scraper = GitHubScraper()
-    elif platform == 'twitter':
-        scraper = TwitterScraper()
-    elif platform == 'producthunt':
-        scraper = ProductHuntScraper()
-    elif platform == 'weibo':
-        scraper = WeiboScraper()
-    elif platform == 'hackernews':
-        scraper = HackerNewsScraper()
-    elif platform == 'youtube':
-        scraper = YouTubeScraper()
-    elif platform == 'reddit':
-        scraper = RedditScraper()
-    elif platform == 'medium':
-        scraper = MediumScraper()
-    elif platform == 'bilibili':
-        scraper = BilibiliScraper()
-    else:
-        raise HTTPException(status_code=400, detail="不支持的平台")
+        # 创建临时CSV文件
+        csv_filename = f"follownet_{platform}_page{page}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        csv_path = os.path.join(tempfile.gettempdir(), csv_filename)
 
-    # 保存数据到CSV
-    await scraper.save_to_csv(result, csv_path)
-    print(f"CSV文件已生成: {csv_path}")
+        # 根据平台选择对应的爬取器来保存CSV
+        if platform == 'github':
+            scraper = GitHubScraper()
+        elif platform == 'twitter':
+            scraper = TwitterScraper()
+        elif platform == 'producthunt':
+            scraper = ProductHuntScraper()
+        elif platform == 'weibo':
+            scraper = WeiboScraper()
+        elif platform == 'hackernews':
+            scraper = HackerNewsScraper()
+        elif platform == 'youtube':
+            scraper = YouTubeScraper()
+        elif platform == 'reddit':
+            scraper = RedditScraper()
+        elif platform == 'medium':
+            scraper = MediumScraper()
+        elif platform == 'bilibili':
+            scraper = BilibiliScraper()
+        else:
+            raise HTTPException(status_code=400, detail="不支持的平台")
 
-    return FileResponse(
-        path=csv_path,
-        filename=csv_filename,
-        media_type='text/csv',
-        headers={"Content-Disposition": f"attachment; filename={csv_filename}"}
-    )
+        # 保存数据到CSV
+        await scraper.save_to_csv(data, csv_path)
+        print(f"CSV文件已生成: {csv_path}")
+
+        return FileResponse(
+            path=csv_path,
+            filename=csv_filename,
+            media_type='text/csv',
+            headers={"Content-Disposition": f"attachment; filename={csv_filename}"}
+        )
+
+    except Exception as e:
+        print(f"导出CSV时出错: {e}")
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
+
+@app.get("/")
+async def root():
+    """API根路径"""
+    return {
+        "message": "FollowNet API",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
 
 if __name__ == "__main__":
     import uvicorn

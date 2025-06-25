@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
   trailingSlash: true,
   images: {
     unoptimized: true,
@@ -9,7 +8,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: process.env.NODE_ENV === 'production' 
+        destination: process.env.NODE_ENV === 'production'
           ? 'https://your-railway-app.railway.app/api/:path*'
           : 'http://localhost:8000/api/:path*',
       },
@@ -17,4 +16,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig; 
+module.exports = nextConfig;
