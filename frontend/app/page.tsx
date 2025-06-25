@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef } from 'react'
-import { UserData, SortField, SortOrder, StreamingStatus, StreamingControls } from "@/types"
+import { UserData, SortField, SortOrder, StreamingStatus } from "@/types"
 import { Header } from "@/components/Header"
 import { SearchForm } from "@/components/SearchForm"
 import { PlatformGrid } from "@/components/PlatformGrid"
@@ -19,12 +19,10 @@ export default function Home() {
   const [streamingStatus, setStreamingStatus] = useState<StreamingStatus>({
     isStreaming: false,
     progress: 0,
-    message: '',
-    controlState: 'stopped'
+    message: ''
   })
 
   // 用于控制流式处理的引用
-  const sessionIdRef = useRef<string | null>(null)
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
 
   const detectPlatform = (inputUrl: string) => {
@@ -41,125 +39,6 @@ export default function Home() {
     return null
   }
 
-  // 流式控制函数
-  const handlePause = async () => {
-    if (!sessionIdRef.current) return
-
-    try {
-      const response = await fetch('http://localhost:8000/api/streaming-control', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: sessionIdRef.current,
-          action: 'pause'
-        }),
-      })
-
-      if (response.ok) {
-        setStreamingStatus(prev => ({
-          ...prev,
-          controlState: 'paused',
-          message: '爬取已暂停'
-        }))
-      }
-    } catch (err) {
-      console.error('暂停请求失败:', err)
-    }
-  }
-
-  const handleResume = async () => {
-    if (!sessionIdRef.current) return
-
-    try {
-      const response = await fetch('http://localhost:8000/api/streaming-control', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: sessionIdRef.current,
-          action: 'resume'
-        }),
-      })
-
-      if (response.ok) {
-        setStreamingStatus(prev => ({
-          ...prev,
-          controlState: 'running',
-          message: '继续爬取中...'
-        }))
-      }
-    } catch (err) {
-      console.error('继续请求失败:', err)
-    }
-  }
-
-  const handleStop = async () => {
-    if (!sessionIdRef.current) return
-
-    setStreamingStatus(prev => ({
-      ...prev,
-      controlState: 'stopping',
-      message: '正在停止爬取...'
-    }))
-
-    try {
-      const response = await fetch('http://localhost:8000/api/streaming-control', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: sessionIdRef.current,
-          action: 'stop'
-        }),
-      })
-
-      if (response.ok) {
-        // 停止reader
-        if (readerRef.current) {
-          readerRef.current.cancel()
-        }
-
-        // 重置状态
-        setTimeout(() => {
-          setStreamingStatus(prev => ({
-            ...prev,
-            isStreaming: false,
-            controlState: 'stopped',
-            message: '爬取已停止'
-          }))
-          sessionIdRef.current = null
-        }, 1000)
-      }
-    } catch (err) {
-      console.error('停止请求失败:', err)
-      // 强制停止
-      if (readerRef.current) {
-        readerRef.current.cancel()
-      }
-      setStreamingStatus(prev => ({
-        ...prev,
-        isStreaming: false,
-        controlState: 'stopped',
-        message: '爬取已强制停止'
-      }))
-      sessionIdRef.current = null
-    }
-  }
-
-  // 流式控制配置
-  const streamingControls: StreamingControls = {
-    onPause: handlePause,
-    onResume: handleResume,
-    onStop: handleStop,
-    canPause: streamingStatus.controlState === 'running',
-    canResume: streamingStatus.controlState === 'paused',
-    canStop: streamingStatus.isStreaming && streamingStatus.controlState !== 'stopping'
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!url.trim() || streamingStatus.isStreaming) return
@@ -174,12 +53,8 @@ export default function Home() {
     setStreamingStatus({
       isStreaming: true,
       progress: 0,
-      message: '正在连接...',
-      controlState: 'running'
+      message: '正在连接...'
     })
-
-    // 重置session ID
-    sessionIdRef.current = null
 
     try {
       const response = await fetch('http://localhost:8000/api/scrape-stream', {
@@ -222,11 +97,6 @@ export default function Home() {
             try {
               const data = JSON.parse(line.slice(6))
 
-              // 保存session_id
-              if (data.session_id && !sessionIdRef.current) {
-                sessionIdRef.current = data.session_id
-              }
-
               switch (data.type) {
                 case 'start':
                 case 'platform':
@@ -239,7 +109,6 @@ export default function Home() {
                     currentUser: data.current_user,
                     processedCount: data.processed_count,
                     totalCount: data.total_count,
-                    controlState: 'running'
                   }))
                   break
 
@@ -254,7 +123,6 @@ export default function Home() {
                     currentUser: data.current_user,
                     processedCount: data.processed_count,
                     totalCount: data.total_count,
-                    controlState: 'running'
                   }))
                   break
 
@@ -263,9 +131,7 @@ export default function Home() {
                     ...prev,
                     isStreaming: false,
                     message: data.message,
-                    controlState: 'stopped'
                   }))
-                  sessionIdRef.current = null
                   break
 
                 case 'complete':
@@ -274,9 +140,7 @@ export default function Home() {
                     isStreaming: false,
                     progress: 100,
                     message: data.message,
-                    controlState: 'stopped'
                   })
-                  sessionIdRef.current = null
                   break
 
                 case 'error':
@@ -285,9 +149,7 @@ export default function Home() {
                     isStreaming: false,
                     progress: 0,
                     message: '',
-                    controlState: 'stopped'
                   })
-                  sessionIdRef.current = null
                   break
               }
             } catch (e) {
@@ -303,7 +165,6 @@ export default function Home() {
           isStreaming: false,
           progress: 0,
           message: '爬取已停止',
-          controlState: 'stopped'
         })
       } else {
         setError('网络错误，请稍后重试')
@@ -311,10 +172,8 @@ export default function Home() {
           isStreaming: false,
           progress: 0,
           message: '',
-          controlState: 'stopped'
         })
       }
-      sessionIdRef.current = null
     } finally {
       // 清理资源
       readerRef.current = null
@@ -365,7 +224,7 @@ export default function Home() {
   }
 
   const handleExportCSV = () => {
-    const csvContent = generateCSV(sortedStreamingData)
+    const csvContent = generateCSV(streamingData)
     const detectedPlatform = detectPlatform(url)
     downloadCSV(csvContent, `follownet_${detectedPlatform || 'data'}_sorted_by_${sortField}_${sortOrder}_${new Date().toISOString().split('T')[0]}.csv`)
   }
@@ -417,7 +276,7 @@ export default function Home() {
   const showDataSection = streamingStatus.isStreaming || streamingData.length > 0
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50 dark:from-slate-900 dark:via-blue-900 dark:to-slate-900 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50 dark:from-slate-900/20 dark:via-blue-900/20 dark:to-slate-900/20 transition-colors duration-300">
       {/* 主题切换按钮 */}
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
@@ -453,7 +312,6 @@ export default function Home() {
             <StreamingProgress
               streamingStatus={streamingStatus}
               streamingDataLength={streamingData.length}
-              controls={streamingControls}
             />
 
             {/* 实时用户数据显示 */}
@@ -474,7 +332,7 @@ export default function Home() {
         )}
 
         {/* 平台展示 */}
-        <PlatformGrid show={showPlatformGrid} />
+        {/* <PlatformGrid show={showPlatformGrid} /> */}
       </div>
     </div>
   )

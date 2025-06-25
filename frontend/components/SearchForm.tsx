@@ -50,60 +50,114 @@ export function SearchForm({
 
   return (
     <div className="max-w-4xl mx-auto mb-12">
-      <div className="overflow-hidden bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm rounded-lg">
+      <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
         <form onSubmit={onSubmit}>
-          <div className="relative">
-            {/* URL输入框 */}
-            <Input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="输入要爬取的URL，例如：https://github.com/username"
-              className="w-full h-14 pl-24 pr-32 text-base bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400"
-              disabled={isStreaming}
-            />
-
-            {/* 绝对定位的用户数选择器 */}
-            <div className="absolute left-3 top-1/2 -translate-y-1/2">
-              <Select
-                value={maxUsers.toString()}
-                onValueChange={(value) => setMaxUsers(Number(value))}
-                disabled={isStreaming}
-              >
-                <SelectTrigger className="w-16 h-8 text-sm border-0 bg-transparent p-0 font-medium flex items-center justify-center">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                  <SelectItem value="1000">1000</SelectItem>
-                  <SelectItem value="10000">10000</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* 工具栏 */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/20 bg-gray-50/50 dark:bg-white/5">
+            <div className="text-sm text-gray-600 dark:text-blue-200 flex items-center gap-2">
+              <Search className="w-4 h-4" />
+              <span>输入要爬取的平台URL</span>
             </div>
-
-            {/* 平台检测标签 */}
-            {detectedPlatform && (
-              <Badge
-                variant="secondary"
-                className="absolute right-36 top-1/2 -translate-y-1/2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
-              >
-                {getPlatformIcon(detectedPlatform)}
-                <span className="ml-1.5">{detectedPlatform}</span>
+            {maxUsers === 1000000 ? (
+              <Badge className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800">
+                不限制用户数
+              </Badge>
+            ) : (
+              <Badge className="bg-green-500/20 text-green-300 border-green-200 dark:border-green-800">
+                最多 {maxUsers} 用户
               </Badge>
             )}
+          </div>
 
-            {/* 绝对定位的提交按钮 */}
-            <Button
-              type="submit"
-              disabled={isStreaming || !url.trim()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-8 px-4 text-sm bg-blue-600 hover:bg-blue-700"
-            >
-              {isStreaming ? '爬取中...' : '开始爬取'}
-            </Button>
+          {/* 主要输入区域 */}
+          <div className="p-6">
+            <div className="grid grid-cols-12 gap-4 items-center">
+              {/* 用户数选择器 */}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 dark:text-blue-200 mb-2">
+                  用户数量
+                </label>
+                <Select
+                  value={maxUsers.toString()}
+                  onValueChange={(value) => setMaxUsers(Number(value))}
+                  disabled={isStreaming}
+                >
+                  <SelectTrigger className="w-full h-10 text-sm border-gray-300 dark:border-white/20 bg-white/50 dark:bg-white/5 text-gray-800 dark:text-blue-200 hover:bg-white/70 dark:hover:bg-white/10 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-gray-300 dark:border-white/20">
+                    <SelectItem value="5" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">5</SelectItem>
+                    <SelectItem value="10" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">10</SelectItem>
+                    <SelectItem value="20" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">20</SelectItem>
+                    <SelectItem value="50" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">50</SelectItem>
+                    <SelectItem value="100" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">100</SelectItem>
+                    <SelectItem value="1000000" className="text-gray-800 dark:text-blue-200 hover:bg-gray-50 dark:hover:bg-white/10">不限</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* URL输入框 */}
+              <div className="col-span-8">
+                <label className="block text-xs font-medium text-gray-700 dark:text-blue-200 mb-2">
+                  平台URL
+                </label>
+                <div className="relative">
+                  <Input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="例如：https://github.com/username 或 https://github.com/owner/repo"
+                    className="w-full h-10 pr-24 text-sm border-gray-300 dark:border-white/20 bg-white/50 dark:bg-white/5 text-gray-800 dark:text-blue-200 placeholder:text-gray-500 dark:placeholder:text-blue-300/60 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400 hover:bg-white/70 dark:hover:bg-white/10 transition-colors"
+                    disabled={isStreaming}
+                  />
+
+                  {/* 平台检测标签 */}
+                  {detectedPlatform && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <Badge
+                        variant="secondary"
+                        className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800 text-xs"
+                      >
+                        {getPlatformIcon(detectedPlatform)}
+                        <span className="ml-1">{detectedPlatform}</span>
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 提交按钮 */}
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 dark:text-blue-200 mb-2">
+                  操作
+                </label>
+                <Button
+                  type="submit"
+                  disabled={isStreaming || !url.trim()}
+                  className="w-full h-10 text-sm bg-blue-600 hover:bg-blue-700 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-white dark:text-blue-200 border-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isStreaming ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>爬取中...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4" />
+                      <span>开始爬取</span>
+                    </div>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* 平台支持提示 */}
+            <div className="mt-4 p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+              <div className="text-xs text-gray-600 dark:text-blue-300/80">
+                <span className="font-medium">支持的平台：</span>
+                <span className="ml-2">GitHub (用户/仓库)、Twitter/X、Product Hunt、Weibo、Hacker News、YouTube、Reddit、Medium、Bilibili</span>
+              </div>
+            </div>
           </div>
         </form>
       </div>

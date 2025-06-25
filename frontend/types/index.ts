@@ -32,8 +32,6 @@ export interface ScrapeResult {
 export type SortField = 'follower_count' | 'following_count' | 'public_repos' | 'scraped_at' | 'username'
 export type SortOrder = 'asc' | 'desc'
 
-export type StreamingControlState = 'running' | 'paused' | 'stopping' | 'stopped'
-
 export interface StreamingStatus {
   isStreaming: boolean
   progress: number
@@ -42,14 +40,4 @@ export interface StreamingStatus {
   currentUser?: string
   processedCount?: number
   totalCount?: number
-  controlState?: StreamingControlState
-}
-
-export interface StreamingControls {
-  onPause: () => void
-  onResume: () => void
-  onStop: () => void
-  canPause: boolean
-  canResume: boolean
-  canStop: boolean
 }

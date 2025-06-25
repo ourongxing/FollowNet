@@ -1,167 +1,113 @@
 import React from 'react'
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { StreamingStatus, StreamingControls } from "@/types"
-import { Pause, Play, Square, Loader2 } from "lucide-react"
+import { StreamingStatus } from "@/types"
+import { Activity, Users, User, Loader2 } from 'lucide-react'
 
 interface StreamingProgressProps {
   streamingStatus: StreamingStatus
   streamingDataLength: number
-  controls?: StreamingControls
 }
 
-export function StreamingProgress({ streamingStatus, streamingDataLength, controls }: StreamingProgressProps) {
+export function StreamingProgress({ streamingStatus, streamingDataLength }: StreamingProgressProps) {
   if (!streamingStatus.isStreaming) return null
-
-  const getStatusInfo = () => {
-    switch (streamingStatus.controlState) {
-      case 'paused':
-        return {
-          label: '已暂停',
-          color: 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300',
-          icon: <Pause className="w-4 h-4" />
-        }
-      case 'stopping':
-        return {
-          label: '正在停止',
-          color: 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
-          icon: <Loader2 className="w-4 h-4 animate-spin" />
-        }
-      case 'stopped':
-        return {
-          label: '已停止',
-          color: 'bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300',
-          icon: <Square className="w-4 h-4" />
-        }
-      default:
-        return {
-          label: '实时爬取中',
-          color: 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300',
-          icon: <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-        }
-    }
-  }
-
-  const statusInfo = getStatusInfo()
 
   return (
     <div className="max-w-4xl mx-auto mb-8">
-      <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-        {/* 头部状态和控制按钮 */}
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
+        {/* 工具栏 */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/20 bg-gray-50/50 dark:bg-white/5">
           <div className="flex items-center gap-3">
-            {statusInfo.icon}
-            <span className="font-medium text-slate-800 dark:text-slate-200">{statusInfo.label}</span>
+            <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <span className="font-medium text-gray-700 dark:text-blue-200">实时爬取进行中</span>
             {streamingStatus.stage && (
-              <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-300 border-blue-400">
+              <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-300 border-blue-400 dark:border-blue-600">
                 阶段 {streamingStatus.stage}
               </Badge>
             )}
           </div>
 
-          {/* 控制按钮组 */}
-          <div className="flex items-center gap-2">
-            <Badge className={statusInfo.color}>
+          <div className="flex items-center gap-3">
+            {/* 进度百分比 */}
+            <Badge className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800">
               {Math.round(streamingStatus.progress)}%
             </Badge>
 
-            {controls && (
-              <div className="flex items-center gap-1 ml-2">
-                {/* 暂停/继续按钮 */}
-                {streamingStatus.controlState === 'paused' ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={controls.onResume}
-                    disabled={!controls.canResume}
-                    className="h-8 px-3 text-xs"
-                  >
-                    <Play className="w-3 h-3 mr-1" />
-                    继续
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={controls.onPause}
-                    disabled={!controls.canPause || streamingStatus.controlState === 'stopping'}
-                    className="h-8 px-3 text-xs"
-                  >
-                    <Pause className="w-3 h-3 mr-1" />
-                    暂停
-                  </Button>
-                )}
+            {/* 已获取用户数 */}
+            {streamingDataLength > 0 && (
+              <Badge className="bg-green-500/20 text-green-300 border-green-200 dark:border-green-800">
+                已获取 {streamingDataLength} 用户
+              </Badge>
+            )}
+          </div>
+        </div>
 
-                {/* 停止按钮 */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={controls.onStop}
-                  disabled={!controls.canStop || streamingStatus.controlState === 'stopping'}
-                  className="h-8 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-                >
-                  {streamingStatus.controlState === 'stopping' ? (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  ) : (
-                    <Square className="w-3 h-3 mr-1" />
-                  )}
-                  停止
-                </Button>
+        {/* 主要内容区域 */}
+        <div className="p-6">
+          {/* 进度条 */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-blue-200">
+                爬取进度
+              </span>
+              <span className="text-sm text-gray-600 dark:text-blue-300">
+                {Math.round(streamingStatus.progress)}%
+              </span>
+            </div>
+            <Progress
+              value={streamingStatus.progress}
+              className="w-full h-3 bg-gray-200 dark:bg-white/10"
+            />
+          </div>
+
+          {/* 统计信息网格 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 处理进度 */}
+            {streamingStatus.processedCount !== undefined && streamingStatus.totalCount !== undefined && (
+              <div className="p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-medium text-gray-700 dark:text-blue-200">处理进度</span>
+                </div>
+                <div className="text-lg font-semibold text-gray-800 dark:text-blue-100">
+                  {streamingStatus.processedCount}/{streamingStatus.totalCount}
+                </div>
+                <div className="text-xs text-gray-600 dark:text-blue-300">
+                  {streamingStatus.totalCount > 0 ? Math.round((streamingStatus.processedCount / streamingStatus.totalCount) * 100) : 0}% 完成
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* 进度条 */}
-        <div className="mb-3">
-          <Progress
-            value={streamingStatus.progress}
-            className="w-full h-2 bg-slate-200 dark:bg-slate-700"
-          />
-        </div>
-
-        {/* 底部信息行 */}
-        <div className="flex items-center justify-between text-sm">
-          {/* 左侧统计信息 */}
-          <div className="flex items-center gap-4 text-slate-600 dark:text-slate-400">
-            {streamingStatus.processedCount !== undefined && streamingStatus.totalCount !== undefined && (
-              <span>
-                已处理: <span className="text-blue-600 dark:text-blue-400 font-medium">
-                  {streamingStatus.processedCount}/{streamingStatus.totalCount}
-                </span>
-              </span>
-            )}
+            {/* 已获取用户 */}
             {streamingDataLength > 0 && (
-              <span>
-                已获取: <span className="text-green-600 dark:text-green-400 font-medium">
-                  {streamingDataLength}
-                </span> 用户
-              </span>
+              <div className="p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="w-4 h-4 text-green-400" />
+                  <span className="text-xs font-medium text-gray-700 dark:text-blue-200">已获取用户</span>
+                </div>
+                <div className="text-lg font-semibold text-gray-800 dark:text-blue-100">
+                  {streamingDataLength.toLocaleString()}
+                </div>
+                <div className="text-xs text-gray-600 dark:text-blue-300">
+                  用户数据
+                </div>
+              </div>
             )}
-            <span className="text-slate-500 dark:text-slate-400">
-              {streamingStatus.message}
-            </span>
-          </div>
 
-          {/* 右侧当前用户信息 */}
-          {streamingStatus.currentUser && streamingStatus.controlState === 'running' && (
-            <div className="flex items-center gap-2">
-              <span className="text-slate-600 dark:text-slate-400">正在爬取:</span>
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">
-                <Avatar className="w-5 h-5">
-                  <AvatarFallback className="bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-xs">
-                    {streamingStatus.currentUser.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="font-medium text-slate-800 dark:text-slate-200">
-                  {streamingStatus.currentUser}
+            {/* 当前阶段 */}
+            <div className="p-3 bg-gray-50/50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+              <div className="flex items-center gap-2 mb-1">
+                <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+                <span className="text-xs font-medium text-gray-700 dark:text-blue-200">
+                  {streamingStatus.stage ? `阶段 ${streamingStatus.stage}` : '状态'}
                 </span>
-                <div className="animate-pulse w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+              </div>
+              <div className="text-sm font-medium text-gray-800 dark:text-blue-100 truncate">
+                {streamingStatus.message || '正在处理...'}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
