@@ -4,10 +4,11 @@ import { useState, useMemo, useRef } from 'react'
 import { UserData, SortField, SortOrder, StreamingStatus } from "@/types"
 import { Header } from "@/components/Header"
 import { SearchForm } from "@/components/SearchForm"
-import { PlatformGrid } from "@/components/PlatformGrid"
 import { StreamingProgress } from "@/components/StreamingProgress"
 import { UserTable } from "@/components/UserTable"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { AlertTriangle, CheckCircle, Clock, Users } from 'lucide-react'
+import { Badge } from "@/components/ui/badge"
 
 export default function Home() {
   const [url, setUrl] = useState('')
@@ -272,7 +273,6 @@ export default function Home() {
     }
   }
 
-  const showPlatformGrid = !streamingStatus.isStreaming && streamingData.length === 0
   const showDataSection = streamingStatus.isStreaming || streamingData.length > 0
 
   return (
@@ -298,9 +298,19 @@ export default function Home() {
 
         {/* 错误信息 */}
         {error && (
-          <div className="max-w-4xl mx-auto mb-12">
-            <div className="p-4 bg-red-100 dark:bg-red-500/20 border border-red-300 dark:border-red-500/30 rounded-xl text-red-800 dark:text-red-200">
-              {error}
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-3 p-4 bg-red-50/50 dark:bg-red-900/10">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                <div>
+                  <div className="font-medium text-red-800 dark:text-red-300">
+                    爬取失败
+                  </div>
+                  <div className="text-sm text-red-600 dark:text-red-400">
+                    {error}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -316,23 +326,51 @@ export default function Home() {
 
             {/* 实时用户数据显示 */}
             {streamingData.length > 0 && (
-              <>
-                <UserTable
-                  users={sortedStreamingData}
-                  sortField={sortField}
-                  sortOrder={sortOrder}
-                  onSort={handleSort}
-                  onUserClick={handleUserClick}
-                  isStreaming={streamingStatus.isStreaming}
-                  onExportCSV={handleExportCSV}
-                />
-              </>
+              <UserTable
+                users={sortedStreamingData}
+                sortField={sortField}
+                sortOrder={sortOrder}
+                onSort={handleSort}
+                onUserClick={handleUserClick}
+                isStreaming={streamingStatus.isStreaming}
+                onExportCSV={handleExportCSV}
+              />
             )}
           </div>
         )}
 
-        {/* 平台展示 */}
-        {/* <PlatformGrid show={showPlatformGrid} /> */}
+        {/* 欢迎信息 - 当没有数据且未在爬取时显示 */}
+        {!showDataSection && (
+          <div className="max-w-4xl mx-auto mb-16">
+            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
+              {/* 工具栏 */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/20 bg-gray-50/50 dark:bg-white/5">
+                <div className="flex items-center gap-3">
+                  <Users className="w-5 h-5 text-blue-400" />
+                  <span className="font-medium text-gray-700 dark:text-blue-200">开始您的第一次爬取</span>
+                </div>
+                <Badge className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800">
+                  支持多平台
+                </Badge>
+              </div>
+
+              {/* 内容区域 */}
+              <div className="p-8 text-center">
+                <div className="mb-6">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <Users className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-blue-100 mb-2">
+                    欢迎使用 FollowNet
+                  </h3>
+                  <p className="text-gray-600 dark:text-blue-300 max-w-md mx-auto">
+                    输入平台URL开始爬取用户数据。支持GitHub、Twitter、Product Hunt等多个平台。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
