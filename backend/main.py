@@ -36,6 +36,7 @@ class ScrapeRequest(BaseModel):
     url: str
     page: Optional[int] = 1  # 添加页码参数
     max_users: Optional[int] = 10  # 添加最大用户数参数
+    stage: Optional[str] = "full"  # 阶段模式：'full'(完整), 'users_only'(仅用户列表), 'details_only'(仅详细信息)
 
 class ScrapeResponse(BaseModel):
     success: bool
@@ -51,6 +52,11 @@ class ScrapeResponse(BaseModel):
 class StreamingControlRequest(BaseModel):
     session_id: str
     action: str  # 'pause', 'resume', 'stop'
+
+class BatchDetailsRequest(BaseModel):
+    users: List[Dict[str, str]]  # 用户列表
+    original_owner: str  # 原始仓库的owner
+    original_repo: str   # 原始仓库名
 
 # 全局会话管理
 streaming_sessions = {}
@@ -435,6 +441,52 @@ async def scrape_and_download(request: ScrapeRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"爬取失败: {str(e)}")
+
+@app.post("/api/github-forks/batch-details")
+async def get_batch_user_details(request: BatchDetailsRequest):
+    """批量获取GitHub fork用户的详细信息（阶段2）"""
+    try:
+        print(f"开始批量获取 {len(request.users)} 个用户的详细信息")
+
+        scraper = GitHubScraper()
+
+        # 执行阶段2：获取用户详细信息
+        detailed_users = await scraper._scrape_forks_users_details(
+            request.users,
+            request.original_owner,
+            request.original_repo
+        )
+
+        print(f"批量获取完成，成功获取 {len(detailed_users)} 个用户的详细信息")
+
+        # 生成缓存ID
+        cache_id = str(uuid.uuid4())
+
+        # 保存到内存缓存
+        cache_data = {
+            'platform': 'github',
+            'data': detailed_users,
+            'page': 1,
+            'has_next': False,
+            'timestamp': datetime.now().isoformat()
+        }
+        data_cache[cache_id] = cache_data
+
+        return ScrapeResponse(
+            success=True,
+            message=f"成功获取 {len(detailed_users)} 个用户的详细信息",
+            platform='github',
+            total_extracted=len(detailed_users),
+            data=detailed_users,
+            download_url=f"/api/export-csv/{cache_id}",
+            current_page=1,
+            has_next_page=False,
+            cache_id=cache_id
+        )
+
+    except Exception as e:
+        print(f"批量获取用户详细信息出错: {e}")
+        raise HTTPException(status_code=500, detail=f"获取用户详细信息失败: {str(e)}")
 
 @app.get("/api/export-csv/{cache_id}")
 async def export_csv(cache_id: str):

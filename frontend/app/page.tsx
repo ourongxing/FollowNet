@@ -338,39 +338,6 @@ export default function Home() {
             )}
           </div>
         )}
-
-        {/* 欢迎信息 - 当没有数据且未在爬取时显示 */}
-        {!showDataSection && (
-          <div className="max-w-4xl mx-auto mb-16">
-            <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
-              {/* 工具栏 */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/20 bg-gray-50/50 dark:bg-white/5">
-                <div className="flex items-center gap-3">
-                  <Users className="w-5 h-5 text-blue-400" />
-                  <span className="font-medium text-gray-700 dark:text-blue-200">开始您的第一次爬取</span>
-                </div>
-                <Badge className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800">
-                  支持多平台
-                </Badge>
-              </div>
-
-              {/* 内容区域 */}
-              <div className="p-8 text-center">
-                <div className="mb-6">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <Users className="w-8 h-8 text-blue-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-blue-100 mb-2">
-                    欢迎使用 FollowNet
-                  </h3>
-                  <p className="text-gray-600 dark:text-blue-300 max-w-md mx-auto">
-                    输入平台URL开始爬取用户数据。支持GitHub、Twitter、Product Hunt等多个平台。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

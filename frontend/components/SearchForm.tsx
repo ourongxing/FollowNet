@@ -52,23 +52,6 @@ export function SearchForm({
     <div className="max-w-4xl mx-auto mb-12">
       <div className="bg-white/80 dark:bg-white/10 backdrop-blur-sm border border-gray-300 dark:border-white/20 rounded-2xl overflow-hidden">
         <form onSubmit={onSubmit}>
-          {/* 工具栏 */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/20 bg-gray-50/50 dark:bg-white/5">
-            <div className="text-sm text-gray-600 dark:text-blue-200 flex items-center gap-2">
-              <Search className="w-4 h-4" />
-              <span>输入要爬取的平台URL</span>
-            </div>
-            {maxUsers === 1000000 ? (
-              <Badge className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800">
-                不限制用户数
-              </Badge>
-            ) : (
-              <Badge className="bg-green-500/20 text-green-300 border-green-200 dark:border-green-800">
-                最多 {maxUsers} 用户
-              </Badge>
-            )}
-          </div>
-
           {/* 主要输入区域 */}
           <div className="p-6">
             <div className="grid grid-cols-12 gap-4 items-center">
@@ -116,7 +99,7 @@ export function SearchForm({
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
                       <Badge
                         variant="secondary"
-                        className="bg-blue-500/20 text-blue-300 border-blue-200 dark:border-blue-800 text-xs"
+                        className="bg-blue-500/30 dark:bg-blue-500/20 border-blue-200 dark:border-blue-800 text-xs"
                       >
                         {getPlatformIcon(detectedPlatform)}
                         <span className="ml-1">{detectedPlatform}</span>
@@ -134,7 +117,7 @@ export function SearchForm({
                 <Button
                   type="submit"
                   disabled={isStreaming || !url.trim()}
-                  className="w-full h-10 text-sm bg-blue-600 hover:bg-blue-700 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-white dark:text-blue-200 border-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-10 text-sm bg-blue-400 hover:bg-blue-500 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 text-white dark:text-blue-200 border-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isStreaming ? (
                     <div className="flex items-center gap-2">
@@ -143,7 +126,6 @@ export function SearchForm({
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Search className="w-4 h-4" />
                       <span>开始爬取</span>
                     </div>
                   )}

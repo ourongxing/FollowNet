@@ -13,6 +13,38 @@ class GitHubProfileScraper:
         self.data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
         os.makedirs(self.data_dir, exist_ok=True)
 
+    def _parse_github_count(self, text: str) -> int:
+        """
+        解析GitHub数字格式，支持：
+        - 纯数字: 1234 -> 1234
+        - 带逗号: 1,234 -> 1234
+        - k格式: 2.4k -> 2400, 12k -> 12000
+        - M格式: 1.2M -> 1200000, 5M -> 5000000
+        """
+        if not text:
+            return 0
+
+        text = text.strip().replace(',', '')
+
+        # 匹配数字格式，支持小数点和k/M后缀
+        match = re.search(r'(\d+(?:\.\d+)?)\s*([kKmM]?)', text)
+        if not match:
+            return 0
+
+        number_str, suffix = match.groups()
+
+        try:
+            number = float(number_str)
+
+            if suffix.lower() == 'k':
+                return int(number * 1000)
+            elif suffix.lower() == 'm':
+                return int(number * 1000000)
+            else:
+                return int(number)
+        except (ValueError, TypeError):
+            return 0
+
     async def scrape_profiles_from_csv_with_progress(self, csv_file_path: str, max_users: int = 100, batch_size: int = 5):
         """
         从CSV文件读取用户列表，获取每个用户的详细资料，带进度报告
@@ -363,23 +395,15 @@ class GitHubProfileScraper:
                     if href and text:
                         text = text.strip()
                         if f'/{username}?tab=followers' in href or f'/{username}/followers' in href:
-                            # 提取数字
-                            numbers = re.findall(r'[\d,]+', text)
-                            if numbers:
-                                count_str = numbers[0].replace(',', '')
-                                try:
-                                    user_info['follower_count'] = int(count_str)
-                                except:
-                                    pass
+                            # 直接解析整个文本，支持k/M格式
+                            count = self._parse_github_count(text)
+                            if count > 0:
+                                user_info['follower_count'] = count
                         elif f'/{username}?tab=following' in href or f'/{username}/following' in href:
-                            # 提取数字
-                            numbers = re.findall(r'[\d,]+', text)
-                            if numbers:
-                                count_str = numbers[0].replace(',', '')
-                                try:
-                                    user_info['following_count'] = int(count_str)
-                                except:
-                                    pass
+                            # 直接解析整个文本，支持k/M格式
+                            count = self._parse_github_count(text)
+                            if count > 0:
+                                user_info['following_count'] = count
             except Exception as e:
                 print(f"获取关注数据时出错: {e}")
 
@@ -391,16 +415,66 @@ class GitHubProfileScraper:
                     text = await link.text_content()
 
                     if href and text and '?tab=repositories' in href:
-                        numbers = re.findall(r'[\d,]+', text)
-                        if numbers:
-                            count_str = numbers[0].replace(',', '')
-                            try:
-                                user_info['public_repos'] = int(count_str)
-                                break
-                            except:
-                                pass
+                        # 直接解析整个文本，支持k/M格式
+                        count = self._parse_github_count(text)
+                        if count > 0:
+                            user_info['public_repos'] = count
+                            break
             except Exception as e:
                 print(f"获取仓库数量时出错: {e}")
+
+                        # 获取email地址
+            try:
+                # 多种策略获取email
+                email_found = False
+
+                # 策略1: 通过itemprop="email"属性精确查找
+                email_item = await page_obj.query_selector('li[itemprop="email"]')
+                if email_item and not email_found:
+                    email_link = await email_item.query_selector('a[href^="mailto:"]')
+                    if email_link:
+                        href = await email_link.get_attribute('href')
+                        if href and href.startswith('mailto:'):
+                            email = href.replace('mailto:', '').strip()
+                            if email:
+                                user_info['email'] = email
+                                print(f"通过itemprop找到email: {email}")
+                                email_found = True
+
+                # 策略2: 在vcard-detail中查找mailto链接
+                if not email_found:
+                    vcard_details = await page_obj.query_selector_all('.vcard-detail, .vcard-details li')
+                    for detail in vcard_details:
+                        email_link = await detail.query_selector('a[href^="mailto:"]')
+                        if email_link:
+                            href = await email_link.get_attribute('href')
+                            if href and href.startswith('mailto:'):
+                                email = href.replace('mailto:', '').strip()
+                                if email:
+                                    user_info['email'] = email
+                                    print(f"通过vcard-detail找到email: {email}")
+                                    email_found = True
+                                    break
+
+                # 策略3: 全局查找mailto链接作为备选
+                if not email_found:
+                    all_mailto_links = await page_obj.query_selector_all('a[href^="mailto:"]')
+                    for link in all_mailto_links:
+                        href = await link.get_attribute('href')
+                        if href and href.startswith('mailto:'):
+                            email = href.replace('mailto:', '').strip()
+                            # 简单验证email格式
+                            if email and '@' in email and '.' in email:
+                                user_info['email'] = email
+                                print(f"通过全局搜索找到email: {email}")
+                                email_found = True
+                                break
+
+                if not email_found:
+                    print(f"未找到用户 {username} 的public email")
+
+            except Exception as e:
+                print(f"获取email时出错: {e}")
 
             # 获取其他资料信息
             try:
@@ -408,6 +482,11 @@ class GitHubProfileScraper:
                 detail_items = await page_obj.query_selector_all('.vcard-details li, .vcard-detail')
 
                 for item in detail_items:
+                    # 跳过email项，因为我们已经单独处理了
+                    itemprop = await item.get_attribute('itemprop')
+                    if itemprop == 'email':
+                        continue
+
                     text = await item.text_content()
                     if text:
                         text = text.strip()

@@ -11,6 +11,6 @@ from .base import BaseScraper
 
 __all__ = [
     'GitHubScraper', 'TwitterScraper', 'ProductHuntScraper', 'WeiboScraper',
-    'HackerNewsScraper', 'YouTubeScraper', 'RedditScraper', 'MediumScraper', 
+    'HackerNewsScraper', 'YouTubeScraper', 'RedditScraper', 'MediumScraper',
     'BilibiliScraper', 'BaseScraper'
-] 
+]
